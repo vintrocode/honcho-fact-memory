@@ -2,7 +2,7 @@ import os
 from typing import List
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, MessagesPlaceholder, load_prompt
+from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, load_prompt
 from langchain_core.output_parsers import NumberedListOutputParser
 from langchain_core.messages import AIMessage, HumanMessage
 
@@ -37,21 +37,105 @@ class LMChain:
         pass
 
     @classmethod
-    async def derive_facts(self, input: str):
+    async def derive_facts(cls, input: str):
         """Derive facts from the user input"""
-        pass
+
+        # format prompt
+        fact_derivation = ChatPromptTemplate.from_messages([
+            cls.system_derive_facts
+        ])
+
+        # LCEL
+        chain = fact_derivation | cls.llm
+        
+        # inference
+        response = await chain.ainvoke({
+            "user_input": input
+        })
+
+        # parse output
+        facts = cls.output_parser.parse(response.content)
+
+        # add as metamessage
+        return facts
     
     @classmethod
-    async def check_dups(self, facts: List):
+    async def check_dups(cls, facts: List):
         """Check that we're not storing duplicate facts"""
-        pass
+
+        # format prompt
+        check_duplication = ChatPromptTemplate.from_messages([
+            cls.system_check_dups
+        ])
+
+        # TODO: query vector store for similar facts
+        existing_facts = None
+
+        # LCEL
+        chain = check_duplication | cls.llm
+
+        # inference
+        response = await chain.ainvoke({
+            "existing_facts": existing_facts,
+            "facts": facts
+        })
+
+        # parse output
+        new_facts = cls.output_parser.parse(response.content)
+
+        # TODO: write to vector store
+
+        return new_facts
+        
 
     @classmethod
-    async def introspect(self, chat_history: List, input:str):
+    async def introspect(cls, chat_history, input:str):
         """Generate questions about the user to use as retrieval over the fact store"""
-        pass
+
+        # format prompt
+        introspection_prompt = ChatPromptTemplate.from_messages([
+            cls.system_introspection
+        ])
+
+        # LCEL
+        chain = introspection_prompt | cls.llm
+
+        # inference
+        response = await chain.ainvoke({
+            "chat_history": chat_history,
+            "input": input
+        })
+
+        # parse output
+        questions = cls.output_parser.parse(response.content)
+
+        # write as metamessages
+
+        return questions
+
     
     @classmethod
-    async def respond(self, chat_history: List, facts: List, input: str):
+    async def respond(cls, chat_history, input: str):
         """Take the facts and chat history and generate a personalized response"""
-        pass
+
+        # format prompt
+        response_prompt = ChatPromptTemplate.from_messages([
+            cls.system_response,
+            chat_history
+        ])
+
+        # TODO: query vector store for facts
+        retrieved_facts = None
+
+        # LCEL
+        chain = response_prompt | cls.llm
+
+        # inference
+        response = await chain.ainvoke({
+            "facts": retrieved_facts,
+        })
+
+        return response.content
+
+        
+        
