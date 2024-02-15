@@ -9,10 +9,10 @@ intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True
 
-app_id = str("vince/honcho-fact-memory")
+app_id = str("vince-honcho-fact-memory")
 
-# honcho = HonchoClient(app_id=app_id, base_url="http://localhost:8000") # uncomment to use local
-honcho = HonchoClient(app_id=app_id) # uses demo server at https://demo.honcho.dev
+honcho = HonchoClient(app_id=app_id, base_url="http://localhost:8000") # uncomment to use local
+# honcho = HonchoClient(app_id=app_id) # uses demo server at https://demo.honcho.dev
 
 bot = discord.Bot(intents=intents)
 
@@ -47,7 +47,11 @@ async def on_message(message):
     session.create_message(is_user=True, content=inp)
 
     async with message.channel.typing():
-        response = await chain.ainvoke({"chat_history": chat_history, "input": inp})
+        response = await LMChain.chat(
+            chat_history=chat_history,
+            collection=collection, 
+            input=inp
+        )
         await message.channel.send(response)
 
     session.create_message(is_user=False, content=response)

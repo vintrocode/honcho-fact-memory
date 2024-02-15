@@ -58,6 +58,8 @@ class LMChain:
         # parse output
         facts = cls.output_parser.parse(response.content)
 
+        print(f"DERIVED FACTS: {facts}")
+
         # add as metamessage
         return facts
     
@@ -86,11 +88,13 @@ class LMChain:
         # parse output
         new_facts = cls.output_parser.parse(response.content)
 
+        print(f"FILTERED FACTS: {new_facts}")
+
         # TODO: write to vector store
         for fact in new_facts:
             collection.create_document(content=fact)
 
-        return new_facts
+        return
         
 
     @classmethod
@@ -108,11 +112,13 @@ class LMChain:
         # inference
         response = await chain.ainvoke({
             "chat_history": chat_history,
-            "input": input
+            "user_input": input
         })
 
         # parse output
         questions = cls.output_parser.parse(response.content)
+
+        print(f"INTROSPECTED QUESTIONS: {questions}")
 
         # write as metamessages
 
@@ -120,17 +126,18 @@ class LMChain:
 
     
     @classmethod
-    async def respond(cls, collection: Collection, chat_history, input: str):
+    async def respond(cls, collection: Collection, chat_history, questions, input: str):
         """Take the facts and chat history and generate a personalized response"""
 
         # format prompt
         response_prompt = ChatPromptTemplate.from_messages([
             cls.system_response,
-            chat_history
+            *chat_history,
+            HumanMessage(content=input)
         ])
 
         # TODO: query vector store for facts
-        retrieved_facts = collection.query(query=input, top_k=10)
+        retrieved_facts = collection.query(query=questions, top_k=10)
 
         # LCEL
         chain = response_prompt | cls.llm
@@ -141,6 +148,21 @@ class LMChain:
         })
 
         return response.content
+    
+    @classmethod
+    async def chat(cls, chat_history, collection: Collection, input: str):
+        """Chat with the model"""
+
+        facts = await cls.derive_facts(input)
+        await cls.check_dups(collection, facts) if facts is not None else None
+
+        # introspect
+        questions = await cls.introspect(chat_history, input)
+
+        # respond
+        response = await cls.respond(collection, chat_history, questions, input)
+
+        return response
 
         
         
