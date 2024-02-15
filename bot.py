@@ -30,6 +30,10 @@ async def on_message(message):
     location_id=str(message.channel.id)
 
     sessions = list(honcho.get_sessions_generator(user_id, location_id))
+    try:
+        collection = honcho.get_collection(user_id=user_id, name="discord")
+    except Exception:
+        collection = honcho.create_collection(user_id=user_id, name="discord")
 
     if len(sessions) > 0:
         session = sessions[0]
