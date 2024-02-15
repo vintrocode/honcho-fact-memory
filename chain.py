@@ -6,6 +6,8 @@ from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTempla
 from langchain_core.output_parsers import NumberedListOutputParser
 from langchain_core.messages import AIMessage, HumanMessage
 
+from honcho import Collection
+
 load_dotenv()
 
 SYSTEM_DERIVE_FACTS = load_prompt(os.path.join(os.path.dirname(__file__), 'prompts/core/derive_facts.yaml'))
@@ -60,7 +62,7 @@ class LMChain:
         return facts
     
     @classmethod
-    async def check_dups(cls, facts: List):
+    async def check_dups(cls, collection: Collection, facts: List):
         """Check that we're not storing duplicate facts"""
 
         # format prompt
@@ -68,8 +70,9 @@ class LMChain:
             cls.system_check_dups
         ])
 
-        # TODO: query vector store for similar facts
-        existing_facts = None
+        query = " ".join(facts)
+        result = collection.query(query=query, top_k=10) 
+        existing_facts = [document.content for document in result]
 
         # LCEL
         chain = check_duplication | cls.llm
@@ -84,6 +87,8 @@ class LMChain:
         new_facts = cls.output_parser.parse(response.content)
 
         # TODO: write to vector store
+        for fact in new_facts:
+            collection.create_document(content=fact)
 
         return new_facts
         
@@ -115,7 +120,7 @@ class LMChain:
 
     
     @classmethod
-    async def respond(cls, chat_history, input: str):
+    async def respond(cls, collection: Collection, chat_history, input: str):
         """Take the facts and chat history and generate a personalized response"""
 
         # format prompt
@@ -125,7 +130,7 @@ class LMChain:
         ])
 
         # TODO: query vector store for facts
-        retrieved_facts = None
+        retrieved_facts = collection.query(query=input, top_k=10)
 
         # LCEL
         chain = response_prompt | cls.llm
