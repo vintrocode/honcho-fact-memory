@@ -8,11 +8,12 @@ from chain import langchain_message_converter, LMChain
 intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True
+intents.members = True
 
-app_id = str("vince-honcho-fact-memory")
+app_id = str("demo-honcho-fact-memory")
 
-honcho = HonchoClient(app_id=app_id, base_url="http://localhost:8000") # uncomment to use local
-# honcho = HonchoClient(app_id=app_id) # uses demo server at https://demo.honcho.dev
+#honcho = HonchoClient(app_id=app_id, base_url="http://localhost:8000") # uncomment to use local
+honcho = HonchoClient(app_id=app_id) # uses demo server at https://demo.honcho.dev
 
 bot = discord.Bot(intents=intents)
 
@@ -22,8 +23,21 @@ async def on_ready():
     print(f'We have logged in as {bot.user}')
 
 @bot.event
+async def on_member_join(member):
+    await member.send(
+        f"*Hello {member.name}, welcome to the server! This is a demo bot built with Honcho,* "
+        "*implementing a naive version of the memory feature similar to what ChatGPT recently released.* "
+        "*To get started, just type a message in this channel and the bot will respond.* "
+        "*Over time, it will remember facts about you and use them to make the conversation more personal.* "
+        "*You can use the /restart command to restart the conversation at any time.* "
+        "*If you have any questions or feedback, feel free to ask in the #honcho channel.* "
+        "*Enjoy!*"
+    )
+    
+    
+@bot.event
 async def on_message(message):
-    if message.author == bot.user:
+    if message.author == bot.user or message.guild is not None:
         return
 
     user_id = f"discord_{str(message.author.id)}"
@@ -44,11 +58,13 @@ async def on_message(message):
     chat_history = langchain_message_converter(history)
 
     inp = message.content
-    session.create_message(is_user=True, content=inp)
+    user_message = session.create_message(is_user=True, content=inp)
 
     async with message.channel.typing():
         response = await LMChain.chat(
             chat_history=chat_history,
+            user_message=user_message,
+            session=session,
             collection=collection, 
             input=inp
         )

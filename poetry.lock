@@ -503,16 +503,14 @@ name = "honcho-ai"
 version = "0.0.3"
 description = "Python Client SDK for Honcho"
 optional = false
-python-versions = "^3.10"
-files = []
-develop = true
+python-versions = ">=3.10,<4.0"
+files = [
+    {file = "honcho_ai-0.0.3-py3-none-any.whl", hash = "sha256:a817ec62c4fd8dad1d629927511ce98a3f626f4bc55474187b80010e208e61ba"},
+    {file = "honcho_ai-0.0.3.tar.gz", hash = "sha256:ca52bb8c5036bfdbeee0c71ca754c580c672b28a4824240123b783f8679ca18e"},
+]
 
 [package.dependencies]
-httpx = "^0.26.0"
-
-[package.source]
-type = "directory"
-url = "../../honcho/sdk"
+httpx = ">=0.26.0,<0.27.0"
 
 [[package]]
 name = "httpcore"
@@ -1544,4 +1542,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "bfb502289af6cec05541f5345abb51e46f9e1fea63aefb4a24944347fe5eda6d"
+content-hash = "ec01ccebabbdd1053e6dc7778ff629842adeff8e97200636460028a1338d656f"

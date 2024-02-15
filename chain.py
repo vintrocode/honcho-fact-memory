@@ -6,7 +6,7 @@ from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTempla
 from langchain_core.output_parsers import NumberedListOutputParser
 from langchain_core.messages import AIMessage, HumanMessage
 
-from honcho import Collection
+from honcho import Collection, Session, Message
 
 load_dotenv()
 
@@ -29,7 +29,7 @@ def langchain_message_converter(messages: List):
 class LMChain:
     "Wrapper class for encapsulating the multiple different chains used"
     output_parser = NumberedListOutputParser()
-    llm: ChatOpenAI = ChatOpenAI(model_name = "gpt-4")
+    llm: ChatOpenAI = ChatOpenAI(model_name = "gpt-3.5-turbo")
     system_derive_facts: SystemMessagePromptTemplate = SystemMessagePromptTemplate(prompt=SYSTEM_DERIVE_FACTS)
     system_introspection: SystemMessagePromptTemplate = SystemMessagePromptTemplate(prompt=SYSTEM_INTROSPECTION)
     system_response: SystemMessagePromptTemplate = SystemMessagePromptTemplate(prompt=SYSTEM_RESPONSE)
@@ -39,7 +39,7 @@ class LMChain:
         pass
 
     @classmethod
-    async def derive_facts(cls, input: str):
+    async def derive_facts(cls, chat_history: List, input: str):
         """Derive facts from the user input"""
 
         # format prompt
@@ -52,6 +52,7 @@ class LMChain:
         
         # inference
         response = await chain.ainvoke({
+            "chat_history": [("user: " + message.content if isinstance(message, HumanMessage) else "ai: " + message.content) for message in chat_history],
             "user_input": input
         })
 
@@ -60,11 +61,10 @@ class LMChain:
 
         print(f"DERIVED FACTS: {facts}")
 
-        # add as metamessage
         return facts
     
     @classmethod
-    async def check_dups(cls, collection: Collection, facts: List):
+    async def check_dups(cls, user_message: Message, session: Session, collection: Collection, facts: List):
         """Check that we're not storing duplicate facts"""
 
         # format prompt
@@ -94,11 +94,15 @@ class LMChain:
         for fact in new_facts:
             collection.create_document(content=fact)
 
+        # add facts as metamessages
+        for fact in new_facts:
+            session.create_metamessage(message=user_message, metamessage_type="fact", content=fact)
+
         return
         
 
     @classmethod
-    async def introspect(cls, chat_history, input:str):
+    async def introspect(cls, user_message: Message, session: Session, chat_history: List, input:str):
         """Generate questions about the user to use as retrieval over the fact store"""
 
         # format prompt
@@ -120,13 +124,15 @@ class LMChain:
 
         print(f"INTROSPECTED QUESTIONS: {questions}")
 
-        # write as metamessages
+        # write questions as metamessages
+        for question in questions:
+            session.create_metamessage(message=user_message, metamessage_type="introspect", content=question)
 
         return questions
 
     
     @classmethod
-    async def respond(cls, collection: Collection, chat_history, questions, input: str):
+    async def respond(cls, collection: Collection, chat_history: List, questions: List, input: str):
         """Take the facts and chat history and generate a personalized response"""
 
         # format prompt
@@ -136,28 +142,28 @@ class LMChain:
             HumanMessage(content=input)
         ])
 
-        # TODO: query vector store for facts
         retrieved_facts = collection.query(query=questions, top_k=10)
+        retrieved_facts_content = [document.content for document in retrieved_facts]
 
         # LCEL
         chain = response_prompt | cls.llm
 
         # inference
         response = await chain.ainvoke({
-            "facts": retrieved_facts,
+            "facts": retrieved_facts_content,
         })
 
         return response.content
     
     @classmethod
-    async def chat(cls, chat_history, collection: Collection, input: str):
+    async def chat(cls, chat_history: List, user_message: Message, session: Session, collection: Collection, input: str):
         """Chat with the model"""
 
-        facts = await cls.derive_facts(input)
-        await cls.check_dups(collection, facts) if facts is not None else None
+        facts = await cls.derive_facts(chat_history, input)
+        await cls.check_dups(user_message, session, collection, facts) if facts is not None else None
 
         # introspect
-        questions = await cls.introspect(chat_history, input)
+        questions = await cls.introspect(user_message, session, chat_history, input)
 
         # respond
         response = await cls.respond(collection, chat_history, questions, input)
@@ -166,3 +172,4 @@ class LMChain:
 
         
         
+
